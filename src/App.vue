@@ -1,6 +1,9 @@
 <template>
   <div id="app" >
-    <Player hostname="localhost" server="192.168.0.105" :port="8083" suuid="testCam0" :verbose="false" />
+    <p> TestApp </p>
+    <div>
+      <Player hostname="localhost" server="172.20.0.96" :port="8083" suuid="testCam0" :verbose="false" />
+    </div>
   </div>
 </template>
 
