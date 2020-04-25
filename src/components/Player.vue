@@ -1,0 +1,161 @@
+<template>
+    <video ref="livestream" style="width:600px;" controls autoplay muted></video>
+</template>
+
+<script>
+    module.exports = {
+        name: 'video-player',
+        props: {
+            server: {
+                type: String,
+                default: "localhost"
+            },
+            port: {
+                type: Number,
+                default: 8083
+            },
+            suuid: {
+                type: String,
+                default: ""
+            },
+            verbose: {
+                type: Boolean,
+                default: false
+            }
+        },
+        data: function () {
+            return {
+                isPlaying: false,
+                streamingStarted: false,
+                ms: null,
+                queue: [],
+                ws: null,
+                sourceBuffer: null,
+            };
+        },
+        mounted() {
+            this.initialize()
+        },
+        beforeDestroy() {
+        },
+        methods: {
+            initialize() {
+                if ('MediaSource' in window) {
+                    this.ms = new MediaSource()
+                    this.ms.addEventListener('sourceopen', this.start, false);
+                    this.$refs["livestream"].src = window.URL.createObjectURL(this.ms);
+                    this.$refs["livestream"].onpause = () => {
+                        console.log("The video has been paused");
+                        this.stop();
+                    };
+                    this.$refs["livestream"].onplay = () => {
+                        console.log("The video has been started");
+                        if (this.isPlaying === false) {
+                            this.start();
+                        }
+                    };
+
+                } else {
+                    console.error("Unsupported MSE");
+                }
+
+            },
+            start() {
+                this.isPlaying = true;
+                let protocol = 'ws';
+                if (location.protocol.indexOf('s') >= 0) {
+                    protocol = 'wss';
+                }
+                this.ws = new WebSocket(protocol + "://" + this.server + ":" + this.port + "/ws/live?suuid=" + this.suuid);
+                this.ws.binaryType = "arraybuffer";
+                this.ws.onopen = (event) => {
+                    console.log('Socket opened', event);
+                }
+                this.ws.onclose = (event) => {
+                    console.log('Socket closed', event);
+                    if (this.isPlaying === true) {
+                        setTimeout(() => {
+                            this.start();
+                        }, 1000);
+                    }
+                }
+                this.ws.onerror = (err) => {
+                    console.error('Socket encountered error: ', err.message, 'Closing socket');
+                    this.ws.close();
+                };
+                this.ws.onmessage = (event) => {
+                    const data = new Uint8Array(event.data);
+                    if (data[0] === 9) {
+                        let decoded_arr = data.slice(1);
+                        let mimeCodec = "";
+                        if (window.TextDecoder) {
+                            mimeCodec = new TextDecoder("utf-8").decode(decoded_arr);
+                        } else {
+                            //mimeCodec =Utf8ArrayToStr(decoded_arr);
+                            mimeCodec = String.fromCharCode(decoded_arr)
+                        }
+                        if (this.verbose) {
+                            console.log('first packet with codec data: ' + mimeCodec);
+                        }
+                        if (!this.sourceBuffer) {
+                            this.sourceBuffer = this.ms.addSourceBuffer('video/mp4; codecs="' + mimeCodec + '"');
+                            this.sourceBuffer.mode = "segments"
+                            this.sourceBuffer.addEventListener("updateend", this.loadPacket);
+                        }
+                    } else {
+                        this.pushPacket(event.data);
+                    }
+                }
+            },
+            stop() {
+                this.isPlaying = false;
+                if (this.ws) {
+                    this.ws.close();
+                    this.sourceBuffer.remove(0, this.$refs["livestream"].currentTime);
+                    this.$refs["livestream"].currentTime = 0
+                    this.ws.onclose(); //hack!
+                }
+            },
+            pushPacket(arr) {
+                let view = new Uint8Array(arr);
+                if (this.verbose) {
+                    console.log("got", arr.byteLength, "bytes.  Values=", view[0], view[1], view[2], view[3], view[4]);
+                }
+                let data = arr;
+                if (!this.streamingStarted) {
+                    this.sourceBuffer.appendBuffer(data);
+                    this.streamingStarted = true;
+                    return;
+                }
+                this.queue.push(data);
+                if (this.verbose) {
+                    console.log("queue push:", this.queue.length);
+                }
+                if (!this.sourceBuffer.updating) {
+                    this.loadPacket();
+                }
+            },
+            loadPacket() {
+                if (!this.sourceBuffer.updating) {
+                    if (this.queue.length > 0) {
+                        let inp = this.queue.shift();
+                        if (this.verbose) {
+                            console.log("queue PULL:", this.queue.length);
+                        }
+                        let view = new Uint8Array(inp);
+                        if (this.verbose) {
+                            console.log("writing buffer with", view[0], view[1], view[2], view[3], view[4]);
+                        }
+                        this.sourceBuffer.appendBuffer(inp);
+                    } else {
+                        this.streamingStarted = false;
+                    }
+                }
+            }
+        }
+    };
+</script>
+
+<style scoped>
+
+</style>
