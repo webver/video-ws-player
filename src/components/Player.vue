@@ -1,5 +1,5 @@
 <template>
-    <video ref="livestream" style="width:600px;" controls autoplay muted></video>
+        <video ref="livestream" class="videosize" controls autoplay muted></video>
 </template>
 
 <script>
@@ -37,6 +37,7 @@
             this.initialize()
         },
         beforeDestroy() {
+            this.stop()
         },
         methods: {
             initialize() {
@@ -87,7 +88,7 @@
                     const data = new Uint8Array(event.data);
                     if (data[0] === 9) {
                         let decoded_arr = data.slice(1);
-                        let mimeCodec = "";
+                        let mimeCodec;
                         if (window.TextDecoder) {
                             mimeCodec = new TextDecoder("utf-8").decode(decoded_arr);
                         } else {
@@ -157,5 +158,13 @@
 </script>
 
 <style scoped>
-
+    .videosize {
+        position: absolute;
+        z-index: -1;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
 </style>
