@@ -1,5 +1,5 @@
 <template>
-        <video ref="livestream" class="videosize" controls autoplay muted></video>
+    <video ref="livestream" class="videosize" controls autoplay muted></video>
 </template>
 
 <script>
@@ -23,8 +23,16 @@
                 default: false
             }
         },
+        watch: {
+            suuid: function() { // watch it
+                this.stop(() =>{
+                    this.start();
+                });
+            }
+        },
         data: function () {
             return {
+                isInited: false,
                 isPlaying: false,
                 streamingStarted: false,
                 ms: null,
@@ -46,16 +54,16 @@
                     this.ms.addEventListener('sourceopen', this.start, false);
                     this.$refs["livestream"].src = window.URL.createObjectURL(this.ms);
                     this.$refs["livestream"].onpause = () => {
-                        console.log("The video has been paused");
+                        console.log("The video " + this.suuid + " has been paused");
                         this.stop();
                     };
                     this.$refs["livestream"].onplay = () => {
-                        console.log("The video has been started");
+                        console.log("The video " + this.suuid + " has been started");
                         if (this.isPlaying === false) {
                             this.start();
                         }
                     };
-
+                    this.inited = true;
                 } else {
                     console.error("Unsupported MSE");
                 }
@@ -108,13 +116,26 @@
                     }
                 }
             },
-            stop() {
-                this.isPlaying = false;
-                if (this.ws) {
-                    this.ws.close();
-                    this.sourceBuffer.remove(0, this.$refs["livestream"].currentTime);
+            stop(callback) {
+                if(this.inited) {
+                    this.isPlaying = false;
+                    if (this.ws) {
+                        this.ws.close();
+                        setTimeout(() => {
+                            this.clearBuffer();
+                            if(callback && typeof callback == "function"){
+                                callback();
+                            }
+                        }, 100);
+                    }
+                }
+            },
+            clearBuffer() {
+                if (this.sourceBuffer && !this.sourceBuffer.updating) {
+                    if (this.$refs["livestream"].currentTime > 0) {
+                        this.sourceBuffer.remove(0, this.$refs["livestream"].currentTime);
+                    }
                     this.$refs["livestream"].currentTime = 0
-                    this.ws.onclose(); //hack!
                 }
             },
             pushPacket(arr) {
@@ -141,7 +162,7 @@
                     if (this.queue.length > 0) {
                         let inp = this.queue.shift();
                         if (this.verbose) {
-                            console.log("queue PULL:", this.queue.length);
+                            console.log("queue pull:", this.queue.length);
                         }
                         let view = new Uint8Array(inp);
                         if (this.verbose) {
