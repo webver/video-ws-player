@@ -1,5 +1,5 @@
 <template>
-    <video ref="livestream" class="videosize" controls autoplay muted></video>
+    <video ref="livestream" class="videosize" preload="auto" controls autoplay muted></video>
 </template>
 
 <script>
@@ -24,8 +24,8 @@
             }
         },
         watch: {
-            suuid: function() { // watch it
-                this.stop(() =>{
+            suuid: function () { // watch it
+                this.stop(() => {
                     this.start();
                 });
             }
@@ -62,6 +62,15 @@
                         if (this.isPlaying === false) {
                             this.start();
                         }
+                    };
+                    this.$refs["livestream"].onwaiting = () => {
+                        console.log("The video " + this.suuid + " waiting");
+                    };
+                    this.$refs["livestream"].onplaying = () => {
+                        console.log("The video " + this.suuid + " playing");
+                    };
+                    this.$refs["livestream"].onstalled = () => {
+                        console.log("The video " + this.suuid + " stalled");
                     };
                     this.inited = true;
                 } else {
@@ -117,13 +126,13 @@
                 }
             },
             stop(callback) {
-                if(this.inited) {
+                if (this.inited) {
                     this.isPlaying = false;
                     if (this.ws) {
                         this.ws.close();
                         setTimeout(() => {
                             this.clearBuffer();
-                            if(callback && typeof callback == "function"){
+                            if (callback && typeof callback == "function") {
                                 callback();
                             }
                         }, 100);
@@ -142,6 +151,15 @@
                 let view = new Uint8Array(arr);
                 if (this.verbose) {
                     console.log("got", arr.byteLength, "bytes.  Values=", view[0], view[1], view[2], view[3], view[4]);
+                    console.log("Current time: ", this.$refs["livestream"].currentTime);
+                    if (this.$refs["livestream"].buffered.length > 0) {
+                        console.log("Buffered time: ", this.$refs["livestream"].buffered.start(0), this.$refs["livestream"].buffered.end(0));
+                    }
+                }
+                if (this.$refs["livestream"].buffered.length > 0) {
+                    if (this.$refs["livestream"].buffered.end(0) - this.$refs["livestream"].currentTime > 3) {
+                        this.$refs["livestream"].currentTime = this.$refs["livestream"].buffered.end(0);
+                    }
                 }
                 let data = arr;
                 if (!this.streamingStarted) {

@@ -23,7 +23,7 @@
         props: {
             server: {
                 type: String,
-                default: "localhost"
+                default: "172.20.0.96"
             },
             port: {
                 type: Number,
