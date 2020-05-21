@@ -3,7 +3,9 @@
 </template>
 
 <script>
-    module.exports = {
+    import axios from 'axios';
+
+    export default {
         name: 'video-player',
         props: {
             server: {
@@ -25,9 +27,13 @@
         },
         watch: {
             suuid: function () { // watch it
-                this.stop(() => {
-                    this.start();
-                });
+                if ('MediaSource' in window) {
+                    this.stop(() => {
+                        this.start();
+                    });
+                } else {
+                    this.startWebRtc()
+                }
             }
         },
         data: function () {
@@ -39,13 +45,18 @@
                 queue: [],
                 ws: null,
                 sourceBuffer: null,
+                peerConnection: null,
+                sendChannel: null,
+                pingTimeoutId: null
             };
         },
         mounted() {
             this.initialize()
         },
         beforeDestroy() {
-            this.stop()
+            if ('MediaSource' in window) {
+                this.stop()
+            }
         },
         methods: {
             initialize() {
@@ -75,6 +86,9 @@
                     this.inited = true;
                 } else {
                     console.error("Unsupported MSE");
+                    if (this.suuid) {
+                        this.startWebRtc()
+                    }
                 }
 
             },
@@ -191,6 +205,95 @@
                         this.streamingStarted = false;
                     }
                 }
+            },
+            /*---------------*/
+            startWebRtc() {
+                let config = {
+                    iceServers: [{
+                        urls: ["turn:numb.viagenie.ca"],
+                        username: "it@mgtniip.ru",
+                        credential: "1qaz@WSX",
+                    }]
+                };
+                this.peerConnection = new RTCPeerConnection(config);
+                this.peerConnection.ononicecandidate = (event) => {
+                    console.log("On ice candidate", event)
+                }
+                this.peerConnection.onnegotiationneeded = async () => {
+                    let offer = await this.peerConnection.createOffer();
+                    await this.peerConnection.setLocalDescription(offer);
+                    console.log("Get remote sdp")
+                    this.getRemoteSdp();
+                };
+
+                this.peerConnection.ontrack = (event) => {
+                    console.log(event.streams.length + ' track is delivered')
+                    this.$refs["livestream"].srcObject = event.streams[0]
+                }
+                this.peerConnection.oniceconnectionstatechange = e => {
+                    console.log(this.peerConnection.iceConnectionState, e)
+                    if (this.peerConnection.iceConnectionState === "disconnected") {
+                        clearInterval(this.pingTimeoutId)
+                        setTimeout(() => {
+                            this.peerConnection?.close()
+                            //this.sendChannel.close()
+                            this.startWebRtc()
+                        }, 1000);
+                    }
+                }
+                console.log(this.suuid)
+                this.getCodecInfo()
+            },
+            getCodecInfo() {
+                axios.get("http://" + this.server + ":" + this.port + "/codec/" + this.suuid)
+                    .then(response => {
+                        try {
+                            const data = response.data
+                            if (data.length > 1) {
+                                console.log('add audio Transceiver')
+                                this.peerConnection.addTransceiver('audio', {
+                                    'direction': 'recvonly'
+                                })
+                            }
+                        } catch (e) {
+                            console.log(e);
+                        } finally {
+                            console.log('add video Transceiver')
+                            this.peerConnection.addTransceiver('video', {
+                                'direction': 'recvonly'
+                            });
+                            //send ping becouse PION not handle RTCSessionDescription.close()
+                            this.sendChannel = this.peerConnection.createDataChannel('foo');
+                            this.sendChannel.onclose = () => console.log('sendChannel has closed');
+                            this.sendChannel.onopen = () => {
+                                console.log('sendChannel has opened');
+                                this.sendChannel.send('ping');
+                                this.pingTimeoutId = setInterval(() => {
+                                    this.sendChannel.send('ping');
+                                }, 1000)
+                            }
+                            this.sendChannel.onmessage = e => console.log(`Message from DataChannel '${this.sendChannel.label}' payload '${e.data}'`);
+                        }
+                    }).catch(error => {
+                    console.log(error)
+                });
+            },
+            getRemoteSdp() {
+                axios.post("http://" + this.server + ":" + this.port + "/recive", {
+                    suuid: this.suuid,
+                    data: btoa(this.peerConnection.localDescription.sdp)
+                }).then(response => {
+                    try {
+                        this.peerConnection.setRemoteDescription(new RTCSessionDescription({
+                            type: 'answer',
+                            sdp: atob(response.data)
+                        }))
+                    } catch (e) {
+                        console.warn(e);
+                    }
+                }).catch(error => {
+                    console.log(error)
+                });
             }
         }
     };

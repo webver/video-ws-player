@@ -23,7 +23,7 @@
         props: {
             server: {
                 type: String,
-                default: "172.20.0.96"
+                default: "localhost"
             },
             port: {
                 type: Number,
@@ -49,6 +49,9 @@
                     if (this.streams.length > 0) {
                         this.activeStream = this.streams[0]
                     }
+                })
+                .catch(error => {
+                    console.log(error)
                 });
         },
         methods:{
