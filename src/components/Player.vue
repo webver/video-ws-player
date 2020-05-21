@@ -3,7 +3,10 @@
 </template>
 
 <script>
-    module.exports = {
+    // import axios from 'axios';
+    import Hls from 'hls.js';
+
+    export default {
         name: 'video-player',
         props: {
             server: {
@@ -25,9 +28,13 @@
         },
         watch: {
             suuid: function () { // watch it
-                this.stop(() => {
-                    this.start();
-                });
+                // if ('MediaSource' in window) {
+                //     this.stop(() => {
+                //         this.start();
+                //     });
+                // } else {
+                    this.startHls()
+                // }
             }
         },
         data: function () {
@@ -39,43 +46,53 @@
                 queue: [],
                 ws: null,
                 sourceBuffer: null,
+                hls: null
             };
         },
         mounted() {
             this.initialize()
         },
         beforeDestroy() {
-            this.stop()
+            if ('MediaSource' in window) {
+                this.stop()
+            } else {
+                if (Hls.isSupported()) {
+                    this.hls.destroy()
+                }
+            }
         },
         methods: {
             initialize() {
-                if ('MediaSource' in window) {
-                    this.ms = new MediaSource()
-                    this.ms.addEventListener('sourceopen', this.start, false);
-                    this.$refs["livestream"].src = window.URL.createObjectURL(this.ms);
-                    this.$refs["livestream"].onpause = () => {
-                        console.log("The video " + this.suuid + " has been paused");
-                        this.stop();
-                    };
-                    this.$refs["livestream"].onplay = () => {
-                        console.log("The video " + this.suuid + " has been started");
-                        if (this.isPlaying === false) {
-                            this.start();
-                        }
-                    };
-                    this.$refs["livestream"].onwaiting = () => {
-                        console.log("The video " + this.suuid + " waiting");
-                    };
-                    this.$refs["livestream"].onplaying = () => {
-                        console.log("The video " + this.suuid + " playing");
-                    };
-                    this.$refs["livestream"].onstalled = () => {
-                        console.log("The video " + this.suuid + " stalled");
-                    };
-                    this.inited = true;
-                } else {
+            //     if ('MediaSource' in window) {
+            //         this.ms = new MediaSource()
+            //         this.ms.addEventListener('sourceopen', this.start, false);
+            //         this.$refs["livestream"].src = window.URL.createObjectURL(this.ms);
+            //         this.$refs["livestream"].onpause = () => {
+            //             console.log("The video " + this.suuid + " has been paused");
+            //             this.stop();
+            //         };
+            //         this.$refs["livestream"].onplay = () => {
+            //             console.log("The video " + this.suuid + " has been started");
+            //             if (this.isPlaying === false) {
+            //                 this.start();
+            //             }
+            //         };
+            //         this.$refs["livestream"].onwaiting = () => {
+            //             console.log("The video " + this.suuid + " waiting");
+            //         };
+            //         this.$refs["livestream"].onplaying = () => {
+            //             console.log("The video " + this.suuid + " playing");
+            //         };
+            //         this.$refs["livestream"].onstalled = () => {
+            //             console.log("The video " + this.suuid + " stalled");
+            //         };
+            //         this.isInited = true;
+                //} else {
                     console.error("Unsupported MSE");
-                }
+                    if (this.suuid != null) {
+                        this.startHls()
+                    }
+                //}
 
             },
             start() {
@@ -126,7 +143,7 @@
                 }
             },
             stop(callback) {
-                if (this.inited) {
+                if (this.isInited) {
                     this.isPlaying = false;
                     if (this.ws) {
                         this.ws.close();
@@ -190,6 +207,47 @@
                     } else {
                         this.streamingStarted = false;
                     }
+                }
+            },
+            startHls() {
+                const video = this.$refs["livestream"]
+                const videoSrc = "http://" + this.server + ":" + this.port + "/hls/" + this.suuid + ".m3u8";
+                if (Hls.isSupported()) {
+                    this.hls = new Hls();
+                    this.hls.attachMedia(video);
+                    this.hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+                        console.log("video and hls.js are now bound together !");
+                        this.hls.loadSource(videoSrc);
+                        this.hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                            console.log("manifest loaded, found " + data.levels.length + " quality level");
+                            video.play();
+                        });
+                    });
+                    this.hls.on(Hls.Events.ERROR, (event, data) => {
+                        if (data.fatal) {
+                            switch(data.type) {
+                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                    // try to recover network error
+                                    console.log("fatal network error encountered, try to recover");
+                                    this.hls.startLoad();
+                                    break;
+                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                    console.log("fatal media error encountered, try to recover");
+                                    this.hls.recoverMediaError();
+                                    break;
+                                default:
+                                    // cannot recover
+                                    this.hls.destroy();
+                                    break;
+                            }
+                        }
+                    });
+                }
+                else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    video.src = videoSrc;
+                    video.addEventListener('loadedmetadata', function() {
+                        video.play();
+                    });
                 }
             }
         }

@@ -11,6 +11,7 @@
     "axios": "^0.19.2",
     "babel-helper-vue-jsx-merge-props": "^2.0.3",
     "core-js": "^3.6.4",
+    "hls.js": "^0.13.2",
     "vue": "^2.6.11",
     "vue-nav-tabs": "^0.5.7"
   },
