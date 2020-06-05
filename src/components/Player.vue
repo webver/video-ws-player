@@ -1,5 +1,8 @@
 <template>
-    <video ref="livestream" class="videosize" preload="auto" controls autoplay muted></video>
+    <div>
+        <video ref="livestream" class="videosize" preload="auto" autoplay muted></video>
+        <div ref="log"> "Log" <br> </div>
+    </div>
 </template>
 
 <script>
@@ -27,15 +30,15 @@
             }
         },
         watch: {
-            suuid: function () { // watch it
-                // if ('MediaSource' in window) {
-                //     this.stop(() => {
-                //         this.start();
-                //     });
-                // } else {
-                    this.startHls()
-                // }
-            }
+            // suuid: function () { // watch it
+            //     if ('MediaSource' in window) {
+            //         this.stop(() => {
+            //             this.start();
+            //         });
+            //     } else {
+            //         this.startHls()
+            //     }
+            // }
         },
         data: function () {
             return {
@@ -54,6 +57,7 @@
         },
         beforeDestroy() {
             if ('MediaSource' in window) {
+                this.isPlaying = false
                 this.stop()
             } else {
                 if (Hls.isSupported()) {
@@ -63,39 +67,40 @@
         },
         methods: {
             initialize() {
-            //     if ('MediaSource' in window) {
-            //         this.ms = new MediaSource()
-            //         this.ms.addEventListener('sourceopen', this.start, false);
-            //         this.$refs["livestream"].src = window.URL.createObjectURL(this.ms);
-            //         this.$refs["livestream"].onpause = () => {
-            //             console.log("The video " + this.suuid + " has been paused");
-            //             this.stop();
-            //         };
-            //         this.$refs["livestream"].onplay = () => {
-            //             console.log("The video " + this.suuid + " has been started");
-            //             if (this.isPlaying === false) {
-            //                 this.start();
-            //             }
-            //         };
-            //         this.$refs["livestream"].onwaiting = () => {
-            //             console.log("The video " + this.suuid + " waiting");
-            //         };
-            //         this.$refs["livestream"].onplaying = () => {
-            //             console.log("The video " + this.suuid + " playing");
-            //         };
-            //         this.$refs["livestream"].onstalled = () => {
-            //             console.log("The video " + this.suuid + " stalled");
-            //         };
-            //         this.isInited = true;
-                //} else {
-                    console.error("Unsupported MSE");
+                if ('MediaSource' in window) {
+                    this.ms = new MediaSource()
+                    this.ms.addEventListener('sourceopen', this.start, false);
+                    this.$refs["livestream"].src = window.URL.createObjectURL(this.ms);
+                    this.$refs["livestream"].onpause = () => {
+                        this.log("The video " + this.suuid + " has been paused");
+                        this.stop();
+                    };
+                    this.$refs["livestream"].onplay = () => {
+                        this.log("The video " + this.suuid + " has been started");
+                        if (this.isPlaying === false) {
+                            this.start();
+                        }
+                    };
+                    this.$refs["livestream"].onwaiting = () => {
+                        this.log("The video " + this.suuid + " waiting");
+                    };
+                    this.$refs["livestream"].onplaying = () => {
+                        this.log("The video " + this.suuid + " playing");
+                    };
+                    this.$refs["livestream"].onstalled = () => {
+                        this.log("The video " + this.suuid + " stalled");
+                    };
+                    this.isInited = true;
+                } else {
+                    this.log("Unsupported MSE");
                     if (this.suuid != null) {
                         this.startHls()
                     }
-                //}
+                }
 
             },
             start() {
+                this.log("Start")
                 this.isPlaying = true;
                 let protocol = 'ws';
                 if (location.protocol.indexOf('s') >= 0) {
@@ -104,11 +109,12 @@
                 this.ws = new WebSocket(protocol + "://" + this.server + ":" + this.port + "/ws/live?suuid=" + this.suuid);
                 this.ws.binaryType = "arraybuffer";
                 this.ws.onopen = (event) => {
-                    console.log('Socket opened', event);
+                    this.log('Socket opened' + event);
                 }
                 this.ws.onclose = (event) => {
-                    console.log('Socket closed', event);
+                    this.log('Socket closed' + event);
                     if (this.isPlaying === true) {
+                        this.log("Set timeout")
                         setTimeout(() => {
                             this.start();
                         }, 1000);
@@ -144,7 +150,8 @@
             },
             stop(callback) {
                 if (this.isInited) {
-                    this.isPlaying = false;
+                    this.log("Stop")
+                    // this.isPlaying = false;
                     if (this.ws) {
                         this.ws.close();
                         setTimeout(() => {
@@ -159,7 +166,7 @@
             clearBuffer() {
                 if (this.sourceBuffer && !this.sourceBuffer.updating) {
                     if (this.$refs["livestream"].currentTime > 0) {
-                        this.sourceBuffer.remove(0, this.$refs["livestream"].currentTime);
+                        this.sourceBuffer.remove(this.$refs["livestream"].buffered.start(0), this.$refs["livestream"].buffered.end(0));
                     }
                     this.$refs["livestream"].currentTime = 0
                 }
@@ -170,7 +177,7 @@
                     console.log("got", arr.byteLength, "bytes.  Values=", view[0], view[1], view[2], view[3], view[4]);
                     console.log("Current time: ", this.$refs["livestream"].currentTime);
                     if (this.$refs["livestream"].buffered.length > 0) {
-                        console.log("Buffered time: ", this.$refs["livestream"].buffered.start(0), this.$refs["livestream"].buffered.end(0));
+                        this.log("Buffered time:" + this.$refs["livestream"].buffered.start(0) + this.$refs["livestream"].buffered.end(0));
                     }
                 }
                 if (this.$refs["livestream"].buffered.length > 0) {
@@ -244,11 +251,31 @@
                     });
                 }
                 else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    this.log("no hls lib, use native player")
                     video.src = videoSrc;
                     video.addEventListener('loadedmetadata', function() {
                         video.play();
                     });
+                    video.onerror = function(err) {
+                        this.log("Error!" + err);
+                    };
+                    video.onplay = function() {
+                        this.log("Video play");
+                    };
+                    video.onpause = function() {
+                        this.log("Video paused");
+                    };
+                    video.onended = function() {
+                        this.log("Video has ended");
+                    };
+                    video.onemptied = function() {
+                        this.log("Video has emptied");
+                    };
                 }
+            },
+            log(msg) {
+                this.$refs["log"].innerHTML += msg + '<br>'
+                console.log(msg)
             }
         }
     };

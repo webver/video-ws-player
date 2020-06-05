@@ -1,21 +1,21 @@
 <template>
     <div id="app">
         <p> TestApp </p>
-        <vue-tabs active-tab-color="lightblue"
-                  active-text-color="white"
-                  @tab-change="handleTabChange">
-            <v-tab v-for="stream in streams" :key="stream" :title="stream">
-            </v-tab>
-        </vue-tabs>
+<!--        <vue-tabs active-tab-color="lightblue"-->
+<!--                  active-text-color="white"-->
+<!--                  @tab-change="handleTabChange">-->
+<!--            <v-tab v-for="stream in streams" :key="stream" :title="stream">-->
+<!--            </v-tab>-->
+<!--        </vue-tabs>-->
 
-        <Player :server="server" :port="port" :suuid="activeStream" :verbose="true"/>
+        <VideoPlayer :server="server" :port="port" suuid="testCam0" :verbose="true"/>
     </div>
 </template>
 
 <script>
     import axios from 'axios';
-    import Player from './components/Player.vue'
-    import {VueTabs, VTab} from 'vue-nav-tabs'
+    import VideoPlayer from './components/camera-layout.vue'
+   // import {VueTabs, VTab} from 'vue-nav-tabs'
     import 'vue-nav-tabs/themes/vue-tabs.css'
 
     export default {
@@ -23,7 +23,7 @@
         props: {
             server: {
                 type: String,
-                default: "109.173.76.230"
+                default: "192.168.88.226"
             },
             port: {
                 type: Number,
@@ -31,9 +31,9 @@
             },
         },
         components: {
-            Player,
-            VueTabs,
-            VTab
+            VideoPlayer,
+            // VueTabs,
+            // VTab
         },
         data: function () {
             return {
