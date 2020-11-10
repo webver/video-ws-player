@@ -8,5 +8,6 @@ module.exports = {
                 // import: [path.resolve(__dirname, 'src/styles/imports.styl')]
             }
         }
-    }
+    },
+    devServer: { port: 38082 }
 };
