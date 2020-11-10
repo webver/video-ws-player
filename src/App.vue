@@ -1,13 +1,5 @@
 <template>
     <div id="app">
-        <p> TestApp </p>
-<!--        <vue-tabs active-tab-color="lightblue"-->
-<!--                  active-text-color="white"-->
-<!--                  @tab-change="handleTabChange">-->
-<!--            <v-tab v-for="stream in streams" :key="stream" :title="stream">-->
-<!--            </v-tab>-->
-<!--        </vue-tabs>-->
-
         <VideoPlayer :server="server" :port="port" suuid="testCam0" :verbose="true"/>
     </div>
 </template>
@@ -23,7 +15,7 @@
         props: {
             server: {
                 type: String,
-                default: "192.168.88.226"
+                default: "localhost"
             },
             port: {
                 type: Number,
@@ -32,8 +24,6 @@
         },
         components: {
             VideoPlayer,
-            // VueTabs,
-            // VTab
         },
         data: function () {
             return {
