@@ -33,7 +33,6 @@ export default {
       type: Array,
       default: () => ([
         'new',
-        'old',
       ])
     },
   },
@@ -48,22 +47,24 @@ export default {
       ws: null,
       sourceBuffer: null,
       playPromise: null,
+      keepAliveTimer: null
     };
   },
+
   mounted() {
     this.initialize()
   },
 
-  beforeDestroy() {
+  beforeDestroy () {
 
     this.isPlaying = false;
     this.stop()
-
+    console.log('Main Vue destroyed')
   },
 
   methods: {
 
-    initialize() {
+    initialize () {
       if ('MediaSource' in window) {
         this.ms = new MediaSource()
         this.ms.addEventListener('sourceopen', this.start, false);
@@ -87,7 +88,9 @@ export default {
 
     },
 
-    start() {
+    start () {
+      console.trace()
+
       this.isPlaying = true;
       let protocol = 'ws';
       if (location.protocol.indexOf('s') >= 0) {
@@ -97,10 +100,27 @@ export default {
       this.ws.binaryType = "arraybuffer";
       this.ws.onopen = (event) => {
         console.log('Socket opened', event);
+        this.clearBuffer()
+        let pingTimer = setInterval(() => {
+          if (this.ws != null && this.ws.readyState === WebSocket.OPEN) {
+            console.log("Send ping")
+            this.ws.send("ping")
+            this.keepAliveTimer = setTimeout(() => {
+              console.log("Close connection - no pong")
+              clearInterval(pingTimer)
+              if (this.ws != null) {
+                this.ws.close()
+              }
+            }, 3000);
+          } else {
+            console.log("No need to send ping")
+          }
+        }, 5000)
       }
       this.ws.onclose = (event) => {
         console.log('Socket closed', event);
         if (this.isPlaying === true) {
+          delete this.ws
           this.timeoutStart = setTimeout(() => {
             this.start();
           }, 1000);
@@ -111,30 +131,37 @@ export default {
         this.ws.close();
       };
       this.ws.onmessage = (event) => {
-        const data = new Uint8Array(event.data);
-        if (data[0] === 9) {
-          let decoded_arr = data.slice(1);
-          let mimeCodec;
-          if (window.TextDecoder) {
-            mimeCodec = new TextDecoder("utf-8").decode(decoded_arr);
-          } else {
-            //mimeCodec =Utf8ArrayToStr(decoded_arr);
-            mimeCodec = String.fromCharCode(decoded_arr)
-          }
-          if (this.verbose) {
-            console.log('first packet with codec data: ' + mimeCodec);
-          }
-          if (!this.sourceBuffer) {
-            this.sourceBuffer = this.ms.addSourceBuffer('video/mp4; codecs="' + mimeCodec + '"');
-            this.sourceBuffer.mode = "segments"
-            this.sourceBuffer.addEventListener("updateend", this.loadPacket);
+        if (typeof event.data === "string" && event.data === "pong") {
+          console.log("Get pong")
+          if (this.keepAliveTimer != null) {
+            clearTimeout(this.keepAliveTimer)
           }
         } else {
-          this.pushPacket(event.data);
+          const data = new Uint8Array(event.data);
+          if (data[0] === 9) {
+            let decoded_arr = data.slice(1);
+            let mimeCodec;
+            if (window.TextDecoder) {
+              mimeCodec = new TextDecoder("utf-8").decode(decoded_arr);
+            } else {
+              //mimeCodec =Utf8ArrayToStr(decoded_arr);
+              mimeCodec = String.fromCharCode(decoded_arr)
+            }
+            if (this.verbose) {
+              console.log('first packet with codec data: ' + mimeCodec);
+            }
+            if (!this.sourceBuffer) {
+              this.sourceBuffer = this.ms.addSourceBuffer('video/mp4; codecs="' + mimeCodec + '"');
+              this.sourceBuffer.mode = "segments"
+              this.sourceBuffer.addEventListener("updateend", this.loadPacket);
+            }
+          } else {
+            this.pushPacket(event.data);
+          }
         }
       }
     },
-    stop() {
+    stop () {
       if (this.isInited && this.ws) {
         if (this.playPromise !== undefined) {
           this.playPromise.then(_ => {
@@ -159,8 +186,6 @@ export default {
           this.timeoutStart = null
           this.clearBuffer()
         }
-
-
       }
     },
     clearBuffer() {
@@ -245,16 +270,8 @@ export default {
         }
       }
     },
-    toggleFullScreen() {
-      if( this.$refs["livestream"].requestFullScreen){
-        this.$refs["livestream"].requestFullScreen();
-      } else if( this.$refs["livestream"].webkitRequestFullScreen){
-        this.$refs["livestream"].webkitRequestFullScreen();
-      } else if( this.$refs["livestream"].mozRequestFullScreen){
-        this.$refs["livestream"].mozRequestFullScreen();
-      }
-    },
     onClickCloseCameraNew() {
+      this.isPlaying = false
       this.stop()
       this.$emit('hideCamera', 'new')
     },

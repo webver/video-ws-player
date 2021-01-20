@@ -1,6 +1,6 @@
 <template>
     <div id="app">
-        <VideoPlayer :server="server" :port="port" suuid="testCam0" :verbose="true"/>
+        <VideoPlayer :server="server" :port="port" suuid="37e8df8f-6062-489b-8fad-3b76952965d7" :verbose="true"/>
     </div>
 </template>
 
@@ -15,11 +15,11 @@
         props: {
             server: {
                 type: String,
-                default: "localhost"
+                default: "77.108.87.134"
             },
             port: {
                 type: Number,
-                default: 8083
+                default: 37896
             },
         },
         components: {
